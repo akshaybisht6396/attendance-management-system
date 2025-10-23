@@ -1,0 +1,30 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: student-service
+          uri: lb://student-service
+          predicates:
+            - Path=/students/**
+
+        - id: subject-service
+          uri: lb://subject-service
+          predicates:
+            - Path=/subjects/**
+        
+        - id: attendance-service
+          uri: lb://attendance-service
+          predicates:
+            - Path=/attendance/**
+
+# Tell the gateway where the Eureka server is
+eureka:
+  client:
+    # Corrected property name below
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
