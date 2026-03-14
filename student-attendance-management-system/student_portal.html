@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+
+    <!-- Main Portal View -->
+    <div id="portalView">
+        <header class="bg-white shadow-md sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto py-3 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-blue-800">My Student Portal</h1>
+                    <p id="welcomeMessage" class="text-gray-600 text-sm">Loading...</p>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- My Subjects Card -->
+            <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200 lg:col-span-1">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">My Subjects</h2>
+                
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="pb-1 text-left text-xs font-medium text-gray-500 uppercase">Subject</th>
+                            <th class="pb-1 text-right text-xs font-medium text-gray-500 uppercase">Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="subjectListBody">
+                        <tr><td colspan="2" class="py-2 text-center text-gray-500">Loading subjects...</td></tr>
+                    </tbody>
+                </table>
+
+                <!-- ADDED: This is the new div for the overall summary -->
+                <div id="subjectSummary" class="text-right font-semibold text-gray-700 mt-4 pt-4 border-t border-gray-100">
+                    <!-- Overall summary will go here -->
+                </div>
+            </div>
+
+            <!-- My Attendance Report Card -->
+            <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200 lg:col-span-2">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 class="text-xl font-semibold text-gray-800">My Attendance Report</h2>
+                    <select id="reportSubjectSelect" class="w-56 px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select subject...</option>
+                    </select>
+                </div>
+
+                <div class="overflow-y-auto h-64">
+                    <table class="w-full table-fixed">
+                        <thead class="bg-gray-100 sticky top-0">
+                            <tr>
+                                <th class="pl-4 pr-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/2">Date</th>
+                                <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/2">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceReportBody" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="2" class="p-4 text-center text-gray-500">Select a subject to see your report.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="attendanceSummary" class="text-right font-semibold text-gray-700 mt-4 pr-2">
+                    <!-- Summary will go here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- Global Variables ---
+        const API_URLS = {
+            student: "http://localhost:8080/api/students",
+            subject: "http://localhost:8082/api/subjects",
+            attendance: "http://localhost:8081/api/v1/attendance",
+        };
+
+        let students = [];
+        let subjects = [];
+        let attendanceData = {};
+        let currentStudent = null;
+
+        // --- DOM Elements ---
+        const portalView = document.getElementById('portalView');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const subjectListBody = document.getElementById('subjectListBody');
+        // ADDED: New DOM element
+        const subjectSummary = document.getElementById('subjectSummary');
+        const reportSubjectSelect = document.getElementById('reportSubjectSelect');
+        const attendanceReportBody = document.getElementById('attendanceReportBody');
+        const attendanceSummary = document.getElementById('attendanceSummary');
+
+        // --- Data Loading ---
+        const MOCK_STUDENTS = [
+            { studentId: 1001, studentName: "Samantha A. Lee" },
+            { studentId: 1002, studentName: "Ethan B. Clark" },
+            { studentId: 1003, studentName: "Olivia C. Rodriguez" },
+            { studentId: 1004, studentName: "Noah D. Kim" },
+            { studentId: 1005, studentName: "Mia E. Chen" },
+        ];
+        const MOCK_SUBJECTS = [
+            { subjectId: "101", subjectName: "Calculus" },
+            { subjectId: "202", subjectName: "History" },
+            { subjectId: "303", subjectName: "Physics" },
+        ];
+
+        async function fetchAndCacheSubjects() {
+            const cachedSubjects = localStorage.getItem("mockSubjects");
+            if (cachedSubjects) {
+                console.log("Loading subjects from cache.");
+                subjects = JSON.parse(cachedSubjects);
+                return;
+            }
+
+            try {
+                console.log("Fetching subjects from backend...");
+                const res = await fetch(API_URLS.subject);
+                if (!res.ok) throw new Error("Backend not responding");
+                
+                const data = await res.json();
+                subjects = data;
+                localStorage.setItem("mockSubjects", JSON.stringify(data));
+                console.log("Subjects fetched and cached.");
+
+            } catch (error) {
+                console.error("Error fetching subjects:", error.message);
+                console.log("Using mock subjects as fallback.");
+                subjects = MOCK_SUBJECTS;
+                localStorage.setItem("mockSubjects", JSON.stringify(MOCK_SUBJECTS));
+            }
+        }
+
+        async function fetchAndCacheStudents() {
+            const cachedStudents = localStorage.getItem("mockStudents");
+            if (cachedStudents) {
+                console.log("Loading students from cache.");
+                students = JSON.parse(cachedStudents);
+                return;
+            }
+
+            try {
+                console.log("Fetching students from backend...");
+                const res = await fetch(API_URLS.student);
+                if (!res.ok) throw new Error("Backend not responding");
+
+                const data = await res.json();
+                students = data;
+                localStorage.setItem("mockStudents", JSON.stringify(data));
+                console.log("Students fetched and cached.");
+
+            } catch (error) {
+                console.error("Error fetching students:", error.message);
+                console.log("Using mock students as fallback.");
+                students = MOCK_STUDENTS;
+                localStorage.setItem("mockStudents", JSON.stringify(MOCK_STUDENTS));
+            }
+        }
+
+        function loadAttendanceData() {
+            attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || {};
+        }
+
+        // --- Attendance Calculation (Used by both subject list and report) ---
+        function getStudentAttendanceFraction(studentId, subjectId) {
+            let total = 0, present = 0;
+            for (const date in attendanceData) {
+                const status = attendanceData[date]?.[subjectId]?.[studentId];
+                if (status === "PRESENT" || status === "ABSENT") {
+                    total++;
+                    if (status === "PRESENT") {
+                        present++;
+                    }
+                }
+            }
+            return { attended: present, total: total };
+        }
+
+        // --- Rendering Logic ---
+        function renderPortal() {
+            if (!currentStudent) {
+                welcomeMessage.textContent = "Welcome! No student data found.";
+                subjectListBody.innerHTML = '<tr><td colspan="2" class="py-2 text-center text-gray-500">No student data.</td></tr>';
+                return;
+            }
+            
+            // 1. Welcome Message
+            welcomeMessage.textContent = `Welcome, ${currentStudent.studentName}! (ID: ${currentStudent.studentId})`;
+
+            // 2. Subject List
+            subjectListBody.innerHTML = ''; // Clear loading/previous state
+            reportSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            
+            // ADDED: Variables to track overall totals
+            let overallAttended = 0;
+            let overallTotal = 0;
+
+            if (subjects.length === 0) {
+                 subjectListBody.innerHTML = '<tr><td colspan="2" class="py-2 text-center text-gray-500">No subjects found.</td></tr>';
+                 subjectSummary.innerHTML = ''; // Clear summary too
+                 return; // Stop here if no subjects
+            }
+
+            subjects.forEach(s => {
+                // --- THIS IS THE NEW LOGIC ---
+                // Calculate attendance for *this* subject
+                const { attended, total } = getStudentAttendanceFraction(currentStudent.studentId, s.subjectId);
+                const percentage = total ? Math.round((attended / total) * 100) : 0;
+
+                // ADDED: Update overall totals
+                overallAttended += attended;
+                overallTotal += total;
+
+                // Populate "My Subjects" table
+                const tr = document.createElement('tr');
+                tr.className = "border-t border-gray-100"; // Add a light border
+                tr.innerHTML = `
+                    <td class="py-2 text-gray-800 font-medium">
+                        ${s.subjectName}
+                        <span class="block text-xs text-gray-400 font-normal">(ID: ${s.subjectId})</span>
+                    </td>
+                    <td class="py-2 text-right text-blue-700 font-semibold">
+                        ${percentage}%
+                        <span class="block text-xs text-gray-500 font-normal">(${attended}/${total})</span>
+                    </td>
+                `;
+                subjectListBody.appendChild(tr);
+                // --- END NEW LOGIC ---
+
+                // Populate "Attendance Report" dropdown (this part is the same)
+                const opt = document.createElement("option");
+                opt.value = s.subjectId;
+                opt.textContent = `${s.subjectName} (ID: ${s.subjectId})`;
+                reportSubjectSelect.appendChild(opt);
+            });
+
+            // 3. Clear report body
+            attendanceReportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">Select a subject to see your report.</td></tr>`;
+            attendanceSummary.textContent = '';
+
+            // 4. ADDED: Render the overall summary
+            const overallPercentage = overallTotal > 0 ? Math.round((overallAttended / overallTotal) * 100) : 0;
+            subjectSummary.innerHTML = `
+                Overall: <span class="text-blue-700">${overallPercentage}%</span>
+                <span class="block text-xs text-gray-500 font-normal">(${overallAttended}/${overallTotal})</span>
+            `;
+        }
+
+        function renderAttendanceReport() {
+            const subjectId = reportSubjectSelect.value;
+            if (!subjectId || !currentStudent) {
+                attendanceReportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">Select a subject to see your report.</td></tr>`;
+                attendanceSummary.textContent = '';
+                return;
+            }
+
+            // Use the shared calculation function
+            const { attended, total } = getStudentAttendanceFraction(currentStudent.studentId, subjectId);
+            const fragment = document.createDocumentFragment();
+
+            // Sort dates from newest to oldest
+            const sortedDates = Object.keys(attendanceData).sort((a, b) => new Date(b) - new Date(a));
+
+            for (const date of sortedDates) {
+                const status = attendanceData[date]?.[subjectId]?.[currentStudent.studentId];
+
+                if (status === "PRESENT" || status === "ABSENT") {
+                    // This data is already counted, now just display it
+                    const tr = document.createElement('tr');
+                    const statusClass = status === "PRESENT" ? "text-green-600 font-semibold" : "text-red-600 font-semibold";
+                    
+                    tr.innerHTML = `
+                        <td class="pl-4 pr-2 py-2 text-sm text-gray-700">${date}</td>
+                        <td class="px-2 py-2 text-sm ${statusClass}">${status}</td>
+                    `;
+                    fragment.appendChild(tr);
+                }
+            }
+
+            if (fragment.children.length === 0) {
+                attendanceReportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">No attendance data found for this subject.</td></tr>`;
+            } else {
+                attendanceReportBody.innerHTML = '';
+                attendanceReportBody.appendChild(fragment);
+            }
+
+            // Update summary
+            const percentage = total > 0 ? Math.round((attended / total) * 100) : 0;
+            // Corrected "present" variable for summary
+            attendanceSummary.textContent = `Overall: ${attended} / ${total} classes (${percentage}%)`;
+        }
+
+        // --- Event Listeners ---
+        reportSubjectSelect.addEventListener('change', renderAttendanceReport);
+
+        // --- Initialization ---
+        // UPDATED: window.onload is now async
+        window.onload = async () => {
+            // 1. Load attendance records (this is fast)
+            loadAttendanceData();
+
+            // 2. Fetch (or get from cache) students and subjects
+            await fetchAndCacheStudents();
+            await fetchAndCacheSubjects();
+
+            if (students.length > 0) {
+                // "Log in" as the first student automatically
+                currentStudent = students[0];
+                
+                // Render the portal (welcome message, subject list)
+                renderPortal();
+
+                // Bonus: Automatically select the first subject and show its report
+                if (subjects.length > 0) {
+                    reportSubjectSelect.value = subjects[0].subjectId;
+                    renderAttendanceReport();
+                }
+
+            } else {
+                // This should no longer happen, but it's good to keep as a fallback.
+                welcomeMessage.textContent = "Welcome! No student data found.";
+                subjectListBody.innerHTML = '<tr><td colspan="2" class="py-2 text-center text-gray-500">Error: Could not load data.</td></tr>';
+                attendanceReportBody.innerHTML = `<tr><td colspan="2" class="p-4 text-center text-gray-500">No data.</li>`;
+            }
+        };
+    </script>
+</body>
+</html>

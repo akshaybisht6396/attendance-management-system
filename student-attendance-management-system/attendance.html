@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Attendance Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" integrity="sha512-Fo3rlrZj/k7ujTnHg4Cfm3J7sYgwrVpSAe3BFA/k6iXhV/fXNqPzV8eT6o8z7J9R4F9pI7H1B/B5gGz7Qz5A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-sm">
+
+    <header class="bg-blue-800 shadow-xl sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto py-3 px-4 sm:px-6 lg:px-8">
+            <h1 class="text-2xl font-bold text-white">Attendance Dashboard</h1>
+            <p class="text-blue-300 text-sm">Manage and review student attendance by date & subject</p>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-4">
+
+        <div class="bg-white rounded-lg shadow-md p-4 flex flex-col lg:flex-row justify-between items-center gap-4 border border-gray-200">
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Select Subject</label>
+                <select id="subjectSelect" class="w-56 px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Loading subjects...</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-700 mb-1">Select Date</label>
+                <input type="date" id="datePicker" class="w-40 px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 border-b pb-2 gap-3">
+                <h2 class="text-xl font-semibold text-gray-800">Student Attendance</h2>
+                <input id="searchInput" type="text" placeholder="Search by student name..."
+                    class="w-56 px-3 py-1 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full divide-y divide-gray-200 table-fixed">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="pl-6 pr-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-3/12">Student ID</th>
+                            <th class="pl-6 pr-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-4/12">Name</th>
+                            <th class="pl-6 pr-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-2/12">% Attendance</th>
+                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase w-3/12">Mark Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="4" class="text-center py-3 text-gray-500">Select a subject and date to load students.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end mt-4 gap-3">
+                <button id="downloadCsv" class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-5 rounded-lg text-sm font-semibold flex items-center">
+                    <i class="fas fa-download mr-2"></i> Download CSV
+                </button>
+                
+                <button id="saveAttendance" class="bg-blue-800 hover:bg-blue-900 text-white py-2 px-5 rounded-lg text-sm font-semibold">
+                    Save Attendance
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const API_URLS = {
+            student: "http://localhost:8080/api/students",
+            subject: "http://localhost:8082/api/subjects",
+            attendance: "http://localhost:8081/api/v1/attendance",
+        };
+
+        const subjectSelect = document.getElementById("subjectSelect");
+        const studentsBody = document.getElementById("studentsBody");
+        const saveButton = document.getElementById("saveAttendance");
+        const downloadButton = document.getElementById("downloadCsv"); 
+        const datePicker = document.getElementById("datePicker");
+        const searchInput = document.getElementById("searchInput");
+
+        let students = [];
+        let subjects = []; 
+        let selectedSubject = null;
+        let selectedDate = null;
+        
+        let attendanceData = JSON.parse(localStorage.getItem("attendanceData")) || {};
+
+        const startDate = new Date("2025-11-05");
+        
+        // --- CHANGED DATE HERE ---
+        const endDate = new Date("2025-12-25"); 
+        // -------------------------
+
+        const today = new Date();
+
+        datePicker.valueAsDate = (today >= startDate && today <= endDate) ? today : startDate;
+        selectedDate = datePicker.value;
+        datePicker.min = startDate.toISOString().split('T')[0];
+        datePicker.max = endDate.toISOString().split('T')[0];
+
+        async function fetchSubjects() {
+            try {
+                const res = await fetch(API_URLS.subject);
+                subjects = await res.json(); 
+                subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+                subjects.forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.subjectId;
+                    opt.textContent = `${s.subjectName} (ID: ${s.subjectId})`;
+                    subjectSelect.appendChild(opt);
+                });
+                if (!selectedSubject && subjects.length > 0) {
+                    subjectSelect.value = subjects[0].subjectId;
+                    selectedSubject = subjects[0].subjectId;
+                }
+            } catch (error) {
+                console.error("Error fetching subjects. Using mock data.", error);
+                subjects = [ 
+                    { subjectId: '101', subjectName: "Calculus" },
+                    { subjectId: '202', subjectName: "History" },
+                ];
+                subjectSelect.innerHTML = `
+                    <option value="">-- Select Subject --</option>
+                    <option value="101">Calculus (ID: 101)</option>
+                    <option value="202">History (ID: 202)</option>
+                `;
+                subjectSelect.value = '101';
+                selectedSubject = '101';
+            }
+        }
+
+        async function fetchStudents() {
+            try {
+                const res = await fetch(API_URLS.student);
+                if (!res.ok) throw new Error(`API response not OK. Status: ${res.status}`);
+                students = await res.json(); 
+            } catch (error) {
+                console.error("Error fetching students. Using mock data.", error);
+                students = [
+                    { studentId: 1001, studentName: "Samantha A. Lee" },
+                    { studentId: 1002, studentName: "Ethan B. Clark" },
+                    { studentId: 1003, studentName: "Olivia C. Rodriguez" },
+                    { studentId: 1004, studentName: "Noah D. Kim" },
+                    { studentId: 1005, studentName: "Mia E. Chen" },
+                ];
+            }
+        }
+
+        function getStudentAttendanceFraction(studentId, subjectId) {
+            let total = 0, present = 0;
+            for (const date in attendanceData) {
+                if (attendanceData[date]?.[subjectId]?.[studentId]) {
+                    const status = attendanceData[date][subjectId][studentId];
+                    if (status === "PRESENT" || status === "ABSENT") {
+                        total++;
+                    }
+                    if (status === "PRESENT") {
+                        present++;
+                    }
+                }
+            }
+            return { attended: present, total: total };
+        }
+
+        function getButtonState(currentStatus) {
+            const isPresent = currentStatus === "PRESENT";
+            if (isPresent) {
+                return { 
+                    text: 'Present', 
+                    classes: "bg-green-100 border-green-400 hover:bg-green-200 text-green-800" 
+                };
+            } else {
+                return { 
+                    text: 'Absent', 
+                    classes: "bg-red-100 border-red-400 hover:bg-red-200 text-red-800" 
+                };
+            }
+        }
+
+        function renderStudents(filterText = "") {
+            if (!selectedSubject) {
+                studentsBody.innerHTML = `<tr><td colspan="4" class="text-center py-3 text-gray-500">Select a subject and date to load students.</td></tr>`;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            const currentDaySubjectRecords = attendanceData[selectedDate]?.[selectedSubject] || {}; 
+
+            const filtered = students.filter(s =>
+                s.studentName.toLowerCase().includes(filterText.toLowerCase())
+            );
+
+            if (filtered.length === 0) {
+                studentsBody.innerHTML = `<tr><td colspan="4" class="text-center py-3 text-gray-500">No students found matching "${filterText}".</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(s => {
+                const currentStatus = currentDaySubjectRecords[s.studentId]; 
+                const { text, classes } = getButtonState(currentStatus); 
+                
+                const { attended, total } = getStudentAttendanceFraction(s.studentId, selectedSubject);
+                const percentage = total ? Math.round((attended / total) * 100) : 0;
+                const attendanceString = `${percentage}% (${attended}/${total})`; 
+
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td class="pl-6 pr-4 py-2 whitespace-nowrap text-xs text-gray-700 text-left">${s.studentId}</td>
+                    <td class="pl-6 pr-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 text-left">${s.studentName}</td>
+                    <td class="pl-6 pr-4 py-2 whitespace-nowrap text-sm text-blue-700 font-semibold text-left">${attendanceString}</td>
+                    <td class="px-4 py-2 text-center">
+                        <button class="present-btn px-3 py-1 border rounded-full font-medium text-xs transition duration-150 ease-in-out ${classes}" data-student="${s.studentId}">
+                            ${text}
+                        </button>
+                    </td>
+                `;
+                fragment.appendChild(tr);
+            });
+
+            studentsBody.innerHTML = ''; 
+            studentsBody.appendChild(fragment);
+        }
+
+        function togglePresent(button) {
+            const id = button.dataset.student;
+            if (!selectedSubject || !selectedDate) return;
+
+            attendanceData[selectedDate] = attendanceData[selectedDate] || {};
+            attendanceData[selectedDate][selectedSubject] = attendanceData[selectedDate][selectedSubject] || {};
+
+            const currentStatus = attendanceData[selectedDate][selectedSubject][id];
+            attendanceData[selectedDate][selectedSubject][id] = (currentStatus === "PRESENT") ? "ABSENT" : "PRESENT";
+
+            localStorage.setItem("attendanceData", JSON.stringify(attendanceData));
+            renderStudents(searchInput.value); 
+        }
+
+        function showCustomAlert(message) {
+            if (document.getElementById('custom-alert')) return;
+
+            const alertModal = document.createElement('div');
+            alertModal.id = 'custom-alert';
+            alertModal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center';
+            alertModal.innerHTML = `
+                <div class="relative p-5 border w-96 shadow-lg rounded-md bg-white">
+                    <div class="mt-3 text-center">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">Notification</h3>
+                        <div class="mt-2 px-7 py-3">
+                            <p class="text-sm text-gray-500">${message}</p>
+                        </div>
+                        <div class="items-center px-4 py-3">
+                            <button id="alert-ok-btn" class="px-4 py-2 bg-blue-800 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-700">
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(alertModal);
+            document.getElementById('alert-ok-btn').onclick = function() {
+                document.body.removeChild(alertModal);
+            };
+        }
+
+        async function saveAttendance() {
+            if (!selectedSubject || !selectedDate) {
+                showCustomAlert("Please select both subject and date!");
+                return;
+            }
+
+            const todayRecords = attendanceData[selectedDate]?.[selectedSubject] || {};
+            const finalRecords = {};
+            students.forEach(s => {
+                finalRecords[s.studentId] = todayRecords[s.studentId] === "PRESENT" ? "PRESENT" : "ABSENT";
+            });
+
+            const entries = Object.entries(finalRecords).map(([studentId, status]) => ({
+                studentId: parseInt(studentId),
+                subjectId: parseInt(selectedSubject),
+                teacherId: 42, 
+                attendanceDate: selectedDate,
+                status,
+            }));
+
+            if (entries.length === 0) {
+                showCustomAlert("No students to save attendance for!");
+                return;
+            }
+            
+            try {
+                const postPromises = entries.map(e => fetch(API_URLS.attendance, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(e),
+                }));
+                await Promise.all(postPromises);
+                showCustomAlert(`Attendance saved successfully! (${entries.length} records processed)`);
+            } catch (error) {
+                console.error("Error saving attendance:", error);
+                showCustomAlert("Attendance saved locally, but failed to sync to API. Check console.");
+            }
+        }
+
+        // --- UPDATED CSV Download Logic ---
+        function downloadAttendanceCsv() {
+            if (!selectedSubject || !selectedDate) {
+                showCustomAlert("Please select both subject and date before downloading!");
+                return;
+            }
+
+            const subject = subjects.find(s => s.subjectId == selectedSubject) || { subjectName: 'Unknown Subject' };
+            
+            const header = ["Student ID", "Name", "Status (Selected Date)", "Total %", "Date", "Subject"];
+            const rows = [];
+            
+            const currentDayRecords = attendanceData[selectedDate]?.[selectedSubject] || {};
+
+            students.forEach(s => {
+                const status = currentDayRecords[s.studentId] || "ABSENT"; 
+                
+                const { attended, total } = getStudentAttendanceFraction(s.studentId, selectedSubject);
+                const percentage = total ? Math.round((attended / total) * 100) : 0;
+                const totalString = `${percentage}% (${attended}/${total})`;
+
+                rows.push([
+                    s.studentId,
+                    `"${s.studentName.replace(/"/g, '""')}"`,
+                    status,
+                    `"${totalString}"`, // Add total percentage to CSV
+                    selectedDate,
+                    `"${subject.subjectName.replace(/"/g, '""')}"`
+                ]);
+            });
+            
+            const csvContent = [
+                header.join(","),
+                ...rows.map(row => row.join(","))
+            ].join("\n");
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const filename = `${subject.subjectName.replace(/\s/g, '_')}_Attendance_${selectedDate}.csv`;
+
+            const a = document.createElement('a');
+            a.href = url;
+            a.setAttribute('download', filename);
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            showCustomAlert(`Downloaded attendance for ${selectedDate} - ${subject.subjectName}`);
+        }
+
+        studentsBody.addEventListener("click", (event) => {
+            const button = event.target.closest(".present-btn");
+            if (button) togglePresent(button);
+        });
+
+        subjectSelect.addEventListener("change", e => {
+            selectedSubject = e.target.value;
+            renderStudents(searchInput.value);
+        });
+
+        datePicker.addEventListener("change", e => {
+            selectedDate = e.target.value; 
+            renderStudents(searchInput.value);
+        });
+
+        searchInput.addEventListener("input", e => {
+            renderStudents(e.target.value);
+        });
+
+        saveButton.addEventListener("click", saveAttendance);
+        downloadButton.addEventListener("click", downloadAttendanceCsv);
+
+        window.onload = async () => {
+            await fetchSubjects();
+            await fetchStudents();
+            renderStudents(searchInput.value);
+        };
+    </script>
+</body>
+</html>
