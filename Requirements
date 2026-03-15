@@ -1,0 +1,56 @@
+📦 Core Dependencies (Maven pom.xml)
+Add these blocks to your service-level pom.xml files to enable the microservices features:
+
+1. Spring Cloud (Service Discovery & Gateway)
+XML
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.springframework.cloud</groupId>
+    <artifactId>spring-cloud-starter-gateway</artifactId>
+</dependency>
+2. Database & Persistence (PostgreSQL & Redis)
+XML
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.postgresql</groupId>
+    <artifactId>postgresql</artifactId>
+    <scope>runtime</scope>
+</dependency>
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+3. Reporting & Security (RBAC & PDF/Excel)
+XML
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+    <groupId>org.apache.poi</groupId>
+    <artifactId>poi-ooxml</artifactId>
+    <version>5.2.3</version>
+</dependency>
+<dependency>
+    <groupId>com.itextpdf</groupId>
+    <artifactId>itextpdf</artifactId>
+    <version>5.5.13.3</version>
+</dependency>
+🐳 System Requirements (Environment)
+Include this section in your README to tell users what they need installed on their machine to run the portal:
+
+Java Development Kit (JDK): 17 or 21
+
+Build Tool: Maven 3.8+
+
+Database: PostgreSQL 14+ and Redis 7.0+
+
+Containerization: Docker & Docker Compose (Recommended for running all services)
+
+IDE: IntelliJ IDEA or VS Code with Spring Boot Extension Pack
